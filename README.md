@@ -1,3 +1,3 @@
-# Conditionner
+# PKMN_Silver
 
-An attempt to build a copier of anything it sees, by general operant conditioning.
+Copy of 1999 Pokemon version Silver
