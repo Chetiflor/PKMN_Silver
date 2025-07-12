@@ -11,6 +11,7 @@ struct wrapped_text
     float y_ratio;
     float w_ratio;
     float h_ratio;
+    float rolling_offset;
     bool borders;
     bool h_stamp_pad;
 };

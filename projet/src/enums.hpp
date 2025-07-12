@@ -1,19 +1,19 @@
 #pragma once
 
 
-enum State
-{
-    title,
-    text,
-    map,
-    battle,
-    pokedex,
-    team,
-    inventory,
-    save,
-    settings,
-    special
-};
+// enum State
+// {
+//     title,
+//     text,
+//     map,
+//     battle,
+//     pokedex,
+//     team,
+//     inventory,
+//     save,
+//     settings,
+//     special
+// };
 
 enum GBA_event
 {

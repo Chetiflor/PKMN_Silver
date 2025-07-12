@@ -3,30 +3,20 @@
 #include "writer.hpp"
 #include "text_interface.hpp"
 #include "enums.hpp"
+#include "state.hpp"
+#include "map_state.hpp"
+#include "text_state.hpp"
+#include "timer.hpp"
 
-struct keys_timer
-{
-    long int A = 0;
-    long int B = 0;
-    long int right = 0;
-    long int up = 0;
-    long int left = 0;
-    long int down = 0;
-    long int start = 0;
-    long int select = 0;
-    long int R = 0;
-    long int L = 0;
-
-    void reset();
-    void print();
-};
+State * state_from_string(std::string str, Game * game);
 
 class Game
 {
 private:
-    State state;
-    keys_timer timer;
+    State *current_state;
+    State *next_state;
 
+    keys_timer timer;
     Writer main_writer;
     TextInterface text_interface;
 
@@ -34,11 +24,15 @@ public:
     static int *w;
     static int *h;
 
-
     Game(/* args */);
     ~Game();
 
     void getEvent(GBA_event ev);
+    void set_next_state(State *next_state_);
     void print_timer();
     void step(SDL_Renderer *renderer);
+    
+    
+    friend MapState;
+    friend TextState;
 };

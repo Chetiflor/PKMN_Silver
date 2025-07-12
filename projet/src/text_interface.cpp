@@ -5,32 +5,40 @@
 #include "text_interface.hpp"
 #include "game.hpp"
 
-choice::choice(std::vector<std::tuple<std::string, monolog *, State>> outcomes_)
+choice::choice(std::vector<std::tuple<std::string, monolog *, std::string>> outcomes_)
 {
     outcomes = outcomes_;
-    dimensions = {2,1};
-    selected_outcome = {0,0};
+    dimensions = {2, 1};
+    selected_outcome = {0, 0};
+    yes_no = true;
 }
 
-std::tuple<std::string, monolog *, State> choice::get_outcome()
+std::tuple<std::string, monolog *, std::string> choice::get_outcome()
 {
-    return outcomes[dimensions.second*selected_outcome.first+selected_outcome.second];
+    return outcomes[dimensions.second * selected_outcome.first + selected_outcome.second];
 }
 
-std::tuple<std::string, monolog *, State> choice::get_outcome(std::pair<int,int> coord)
+std::tuple<std::string, monolog *, std::string> choice::get_outcome(std::pair<int, int> coord)
 {
-    return outcomes[dimensions.second*coord.first+coord.second];
+    return outcomes[dimensions.second * coord.first + coord.second];
 }
 
-
-void choice::switch_choice(std::pair<int,int> direction)
+void choice::switch_choice(std::pair<int, int> direction)
 {
-    selected_outcome.first = (selected_outcome.first + direction.first+dimensions.first)%dimensions.first;
-    selected_outcome.second = (selected_outcome.second + direction.second+dimensions.second)%dimensions.second;
+    selected_outcome.first = (selected_outcome.first + direction.first + dimensions.first) % dimensions.first;
+    selected_outcome.second = (selected_outcome.second + direction.second + dimensions.second) % dimensions.second;
 }
-
+void TextInterface::select_yes_no(std::string &next_state, bool yes_no)
+{
+    if (chosing && current_loaded_dialog->query->yes_no)
+    {
+        current_loaded_dialog->query->selected_outcome.first = !yes_no;
+        current_loaded_dialog->query->selected_outcome.second = 0;
+    }
+}
 TextInterface::TextInterface(/* args */)
 {
+    full_line_time_trigger = 1000000000;
 }
 
 TextInterface::~TextInterface()
@@ -72,8 +80,9 @@ monolog::monolog(std::string str, int stamps_per_line)
 monolog *TextInterface::craft_test_dialog()
 {
     monolog *txt = new monolog("Hello World ? How are you ? Do you want to read over ?", 18);
-    std::tuple<std::string, monolog *, State> yes = {"YES", txt, text};
-    std::tuple<std::string, monolog *, State> no = {"NO", nullptr, map};
+    monolog *txt2 = new monolog("Alright, let's go, see you later then !", 18);
+    std::tuple<std::string, monolog *, std::string> yes = {"YES", txt, "text"};
+    std::tuple<std::string, monolog *, std::string> no = {"NO", txt2, "map"};
     txt->query = new choice({yes, no});
     return txt;
 };
@@ -88,7 +97,7 @@ void TextInterface::init_dialog()
 {
 
     auto time = std::chrono::system_clock::now();
-    time_of_line_begin = time.time_since_epoch().count();
+    last_time = time.time_since_epoch().count();
     dialog_current_line = 0;
     line_over = false;
     chosing = false;
@@ -99,33 +108,49 @@ bool TextInterface::is_chosing()
     return chosing;
 }
 
-void TextInterface::forward(State &state)
+void TextInterface::step(bool fast)
 {
-    
-    //std::cout << dialog_current_line << std::endl;
-    if (!line_over)
+    auto time = std::chrono::system_clock::now();
+    int delta_time = (time.time_since_epoch().count() - last_time)* (fast ? 2 : 1);
+    time_since_line_begin += delta_time ;
+    if (rolling_offset != 0)
     {
-        line_over = true;
+        rolling_offset = std::max(rolling_offset - float(9*delta_time) / (full_line_time_trigger), 0.f);
+        if (rolling_offset == 0)
+        {
+
+            dialog_current_line++;
+        }
+    }
+    last_time = time.time_since_epoch().count();
+}
+
+void TextInterface::forward(std::string &next_state)
+{
+    // std::cout << dialog_current_line << std::endl;
+    if (!line_over || rolling_offset > 0)
+    {
         return;
     }
     if (dialog_current_line != current_loaded_dialog->content.size() - 1)
     {
-        dialog_current_line++;
         line_over = false;
+        rolling_offset = 1;
         auto time = std::chrono::system_clock::now();
-        time_of_line_begin = time.time_since_epoch().count();
+        time_since_line_begin = 0;
+        last_time = time.time_since_epoch().count();
         return;
     }
     // TODO : maybe delete previous dialog and choice depending on how is stored text data
     if (current_loaded_dialog->query == nullptr)
     {
-        state = map;
+        next_state = "map";
         return;
     }
-    std::tuple<std::string, monolog *, State> outcome = current_loaded_dialog->query->get_outcome();
+    std::tuple<std::string, monolog *, std::string> outcome = current_loaded_dialog->query->get_outcome();
     if (std::get<1>(outcome) == nullptr)
     {
-        state = std::get<2>(outcome);
+        next_state = std::get<2>(outcome);
         return;
     }
     load_dialog(std::get<1>(outcome));
@@ -134,7 +159,6 @@ void TextInterface::forward(State &state)
 
 wrapped_text TextInterface::get_basic_dialog_content()
 {
-    long int full_line_time_trigger = 1000000000;
 
     wrapped_text to_return;
     to_return.stamp_w_ratio = 1.f / 20;
@@ -147,14 +171,22 @@ wrapped_text TextInterface::get_basic_dialog_content()
     to_return.h_stamp_pad = true;
 
     int stamps_per_line = to_return.w_ratio / to_return.stamp_w_ratio;
+    if (rolling_offset > 0)
+    {
 
+        to_return.rolling_offset = rolling_offset;
+        to_return.lines.push_back(current_loaded_dialog->content[dialog_current_line]);
+
+        return to_return;
+    }
+
+    to_return.rolling_offset = 0;
     if (dialog_current_line != 0)
     {
 
         to_return.lines.push_back(current_loaded_dialog->content[dialog_current_line - 1]);
     }
     auto time = std::chrono::system_clock::now();
-    long int time_since_line_begin = time.time_since_epoch().count() - time_of_line_begin;
     if (line_over)
     {
         to_return.lines.push_back(current_loaded_dialog->content[dialog_current_line]);
@@ -163,7 +195,7 @@ wrapped_text TextInterface::get_basic_dialog_content()
             dialog_current_line++;
             line_over = false;
         }
-        time_of_line_begin = time.time_since_epoch().count();
+        time_since_line_begin = 0;
 
         return to_return;
     }
@@ -200,7 +232,7 @@ wrapped_text TextInterface::get_basic_dialog_query()
             for (int j = 0; j < c.dimensions.second; j++)
             {
 
-                to_return.lines.push_back((i == c.selected_outcome.first&& j==c.selected_outcome.second ? "#arrow_right#" : " ") + std::get<0>(current_loaded_dialog->query->outcomes[i]));
+                to_return.lines.push_back((i == c.selected_outcome.first && j == c.selected_outcome.second ? "#arrow_right#" : " ") + std::get<0>(current_loaded_dialog->query->outcomes[i]));
             }
         }
     }
@@ -208,12 +240,9 @@ wrapped_text TextInterface::get_basic_dialog_query()
     return to_return;
 };
 
-
-
-void TextInterface::switch_choice(std::pair<int,int> direction)
+void TextInterface::switch_choice(std::pair<int, int> direction)
 {
-    std::cout<<chosing<<std::endl;
-    if(chosing)
+    if (chosing)
     {
 
         current_loaded_dialog->query->switch_choice(direction);

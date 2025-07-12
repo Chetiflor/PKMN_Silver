@@ -8,12 +8,13 @@ project(pgm)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-include_directories("projet/src/")
+include_directories("projet/src/" "projet/src/states/")
 
 file(
 GLOB_RECURSE
 source_files
 projet/src/*.[cht]pp
+projet/src/states/*.[cht]pp
 )
 
 set(CMAKE_BUILD_TYPE Debug)
